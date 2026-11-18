@@ -1,0 +1,1914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>For You</title>
+
+  <!-- Editorial Typography: Cormorant Garamond (Serif), Pinyon Script (Signature), Inter (UI) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Inter:wght@300;400;500&family=Pinyon+Script&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Export Libraries (PDF & Image) with graceful print/canvas fallbacks -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+
+  <style>
+    /* ==========================================================================
+       DESIGN TOKENS & ATMOSPHERIC BASE
+       ========================================================================== */
+    :root {
+      --ivory: #FAF7F2;
+      --paper: #FFFDF9;
+      --blush: #F4E6E3;
+      --dusty-rose: #C8908E;
+      --soft-mauve: #8C6A73;
+      --muted-gold: #B89768;
+      --ink: #36292D;
+      --ink-soft: #5A474D;
+      --deep-mauve: #6E4F58;
+      --gold-light: rgba(184, 151, 104, 0.32);
+      --shadow-soft: 0 12px 36px -10px rgba(54, 41, 45, 0.08);
+      --shadow-paper: 0 24px 60px -16px rgba(54, 41, 45, 0.14), 0 4px 16px -4px rgba(184, 151, 104, 0.12);
+
+      --font-serif: "Cormorant Garamond", Georgia, serif;
+      --font-script: "Pinyon Script", cursive;
+      --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+
+      --ease-cinematic: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      min-height: 100dvh;
+      background-color: var(--ivory);
+      background-image:
+        radial-gradient(ellipse at 18% 12%, rgba(244, 230, 227, 0.85) 0%, transparent 55%),
+        radial-gradient(ellipse at 82% 88%, rgba(200, 144, 142, 0.18) 0%, transparent 55%),
+        linear-gradient(180deg, var(--ivory) 0%, #F7EFEA 100%);
+      color: var(--ink);
+      font-family: var(--font-serif);
+      line-height: 1.65;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Subtle tactile paper grain overlay */
+    .paper-grain {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0.032;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    /* Floating petals & warm light particles canvas */
+    #atmosphere-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* ==========================================================================
+       TOP MINIMAL HUD (Chapter Indicator)
+       ========================================================================== */
+    .top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: max(16px, env(safe-area-inset-top)) 24px 12px;
+      pointer-events: none;
+    }
+
+    .chapter-indicator {
+      pointer-events: auto;
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      font-weight: 400;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--soft-mauve);
+      opacity: 0.85;
+      transition: opacity 0.6s ease;
+    }
+
+    /* ==========================================================================
+       SCENE ARCHITECTURE (Full-Screen Cinematic Stages)
+       ========================================================================== */
+    main {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+    }
+
+    .scene {
+      display: none;
+      min-height: 100dvh;
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 84px 24px 64px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(16px);
+      transition:
+        opacity 0.9s var(--ease-cinematic),
+        transform 0.9s var(--ease-cinematic);
+    }
+
+    .scene.is-active {
+      display: flex;
+    }
+
+    .scene.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .scene--letter {
+      justify-content: flex-start;
+      max-width: 760px;
+      padding-top: 88px;
+      padding-bottom: 96px;
+    }
+
+    /* Typography Helpers */
+    .eyebrow {
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      font-weight: 400;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: var(--muted-gold);
+      margin-bottom: 18px;
+    }
+
+    .heading-display {
+      font-family: var(--font-serif);
+      font-weight: 400;
+      font-size: clamp(1.9rem, 5.5vw, 3rem);
+      line-height: 1.22;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      margin-bottom: 16px;
+    }
+
+    .subtitle-serif {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 400;
+      font-size: clamp(1.15rem, 3.2vw, 1.42rem);
+      color: var(--ink-soft);
+      max-width: 480px;
+      margin: 0 auto 32px;
+    }
+
+    .divider-flourish {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin: 22px auto;
+      color: var(--muted-gold);
+      opacity: 0.75;
+    }
+
+    .divider-flourish::before,
+    .divider-flourish::after {
+      content: "";
+      width: 44px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--muted-gold), transparent);
+    }
+
+    /* ==========================================================================
+       INTERACTIVE CONTROLS (Stationery Cards, Option Pills, Inputs, Buttons)
+       ========================================================================== */
+    .prompt-card {
+      width: 100%;
+      max-width: 500px;
+      background: rgba(255, 253, 249, 0.82);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--gold-light);
+      border-radius: 18px;
+      padding: clamp(26px, 5vw, 40px) clamp(20px, 5vw, 36px);
+      box-shadow: var(--shadow-soft);
+      transition: transform 0.5s var(--ease-cinematic), opacity 0.5s ease;
+    }
+
+    .question-step-label {
+      font-family: var(--font-sans);
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--soft-mauve);
+      margin-bottom: 12px;
+    }
+
+    .question-text {
+      font-family: var(--font-serif);
+      font-size: clamp(1.45rem, 4vw, 1.85rem);
+      font-weight: 400;
+      line-height: 1.35;
+      color: var(--ink);
+      margin-bottom: 26px;
+    }
+
+    .options-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .option-pill {
+      min-height: 48px;
+      padding: 12px 24px;
+      border-radius: 999px;
+      border: 1px solid rgba(184, 151, 104, 0.42);
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 0.82rem;
+      font-weight: 400;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.35s var(--ease-cinematic);
+      box-shadow: 0 2px 8px rgba(54, 41, 45, 0.03);
+    }
+
+    .option-pill:hover {
+      border-color: var(--dusty-rose);
+      background: var(--blush);
+      transform: translateY(-1px);
+    }
+
+    .option-pill:active {
+      transform: scale(0.98);
+    }
+
+    .option-pill.is-wrong {
+      border-color: var(--dusty-rose);
+      background: rgba(200, 144, 142, 0.18);
+      color: var(--deep-mauve);
+      animation: gentleShake 0.45s ease;
+    }
+
+    .option-pill.is-correct {
+      border-color: var(--muted-gold);
+      background: var(--blush);
+      color: var(--ink);
+      box-shadow: 0 0 0 3px rgba(184, 151, 104, 0.16);
+    }
+
+    @keyframes gentleShake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-3px); }
+    }
+
+    /* Optional Text Input Row */
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    @media (min-width: 480px) {
+      .input-group--inline {
+        flex-direction: row;
+      }
+    }
+
+    .text-field {
+      width: 100%;
+      min-height: 48px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(184, 151, 104, 0.42);
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-serif);
+      font-size: 1.15rem;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.35s ease, box-shadow 0.35s ease;
+    }
+
+    .text-field::placeholder {
+      color: var(--soft-mauve);
+      font-style: italic;
+      opacity: 0.75;
+    }
+
+    .text-field:focus {
+      border-color: var(--muted-gold);
+      box-shadow: 0 0 0 3px rgba(184, 151, 104, 0.14);
+    }
+
+    /* Primary & Secondary Editorial Buttons */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 48px;
+      padding: 13px 30px;
+      border-radius: 999px;
+      border: 1px solid var(--muted-gold);
+      background: linear-gradient(180deg, #fffdf9 0%, var(--blush) 100%);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 6px 20px -6px rgba(140, 106, 115, 0.25);
+      transition: all 0.4s var(--ease-cinematic);
+      white-space: nowrap;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 26px -6px rgba(140, 106, 115, 0.35);
+      border-color: var(--dusty-rose);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 10px 20px;
+      border-radius: 999px;
+      border: 1px solid rgba(184, 151, 104, 0.35);
+      background: rgba(255, 253, 249, 0.65);
+      color: var(--deep-mauve);
+      font-family: var(--font-sans);
+      font-size: 0.74rem;
+      font-weight: 400;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.35s var(--ease-cinematic);
+    }
+
+    .btn-ghost:hover {
+      background: var(--paper);
+      border-color: var(--muted-gold);
+      color: var(--ink);
+    }
+
+    .btn-link {
+      background: none;
+      border: none;
+      min-height: 40px;
+      padding: 8px 14px;
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--soft-mauve);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+      text-decoration-color: rgba(184, 151, 104, 0.5);
+      transition: color 0.3s ease;
+    }
+
+    .btn-link:hover {
+      color: var(--ink);
+    }
+
+    /* Loving Feedback & Hint Area */
+    .feedback-line {
+      min-height: 28px;
+      margin-top: 14px;
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.18rem;
+      color: var(--deep-mauve);
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.45s ease, transform 0.45s ease;
+    }
+
+    .feedback-line.is-shown {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .hint-box {
+      margin-top: 10px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      background: rgba(244, 230, 227, 0.55);
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.05rem;
+      color: var(--ink-soft);
+      display: none;
+    }
+
+    .hint-box.is-shown {
+      display: block;
+      animation: fadeSlideUp 0.45s var(--ease-cinematic);
+    }
+
+    /* ==========================================================================
+       SCENE 2: SPECIAL DATE REVEAL
+       ========================================================================== */
+    .date-reveal-card {
+      display: none;
+      margin-top: 26px;
+      padding-top: 24px;
+      border-top: 1px solid var(--gold-light);
+      animation: fadeSlideUp 0.8s var(--ease-cinematic) forwards;
+    }
+
+    .date-reveal-card.is-shown {
+      display: block;
+    }
+
+    .special-date-badge {
+      display: inline-block;
+      font-family: var(--font-serif);
+      font-size: clamp(1.85rem, 5vw, 2.45rem);
+      font-weight: 500;
+      color: var(--ink);
+      letter-spacing: 0.03em;
+      margin: 10px 0 8px;
+    }
+
+    .special-date-meaning {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.25rem;
+      color: var(--ink-soft);
+      max-width: 420px;
+      margin: 0 auto 26px;
+    }
+
+    /* ==========================================================================
+       SCENE 3: QUIET DECLARATION & THIN-LINE BEATING HEART
+       ========================================================================== */
+    .heart-emblem-wrap {
+      position: relative;
+      width: 84px;
+      height: 84px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 28px;
+    }
+
+    .heart-glow {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(200, 144, 142, 0.34) 0%, transparent 70%);
+      animation: pulseGlow 3.2s ease-in-out infinite;
+    }
+
+    .thin-heart-svg {
+      width: 54px;
+      height: 54px;
+      position: relative;
+      z-index: 2;
+      animation: heartbeatSlow 3.2s ease-in-out infinite;
+    }
+
+    @keyframes heartbeatSlow {
+      0%, 100% { transform: scale(1); }
+      14% { transform: scale(1.08); }
+      28% { transform: scale(1); }
+      42% { transform: scale(1.05); }
+      56% { transform: scale(1); }
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.55; transform: scale(0.95); }
+      20% { opacity: 1; transform: scale(1.15); }
+      50% { opacity: 0.6; transform: scale(1); }
+    }
+
+    .declaration-line-1 {
+      font-family: var(--font-serif);
+      font-weight: 400;
+      font-size: clamp(2.1rem, 6vw, 3.35rem);
+      line-height: 1.2;
+      color: var(--ink);
+      max-width: 560px;
+      margin: 0 auto 18px;
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity 1.2s var(--ease-cinematic), transform 1.2s var(--ease-cinematic);
+    }
+
+    .declaration-line-2 {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 400;
+      font-size: clamp(1.25rem, 3.5vw, 1.65rem);
+      color: var(--soft-mauve);
+      margin-bottom: 42px;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 1.2s var(--ease-cinematic), transform 1.2s var(--ease-cinematic);
+    }
+
+    .declaration-cta {
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 1s var(--ease-cinematic), transform 1s var(--ease-cinematic);
+    }
+
+    .is-revealed {
+      opacity: 1 !important;
+      transform: translateY(0) !important;
+    }
+
+    /* ==========================================================================
+       SCENE 4: THE LOVE LETTER (Editorial Stationery Card)
+       ========================================================================== */
+    .letter-controls-bar {
+      width: 100%;
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 12px;
+    }
+
+    .stationery-sheet {
+      position: relative;
+      width: 100%;
+      background-color: var(--paper);
+      background-image: linear-gradient(180deg, rgba(250, 247, 242, 0.4) 0%, rgba(255, 253, 249, 1) 100%);
+      border-radius: 6px;
+      padding: clamp(34px, 7vw, 68px) clamp(26px, 7vw, 64px);
+      box-shadow: var(--shadow-paper);
+      text-align: left;
+      border: 1px solid rgba(184, 151, 104, 0.35);
+    }
+
+    /* Inner fine gold stationery frame */
+    .stationery-sheet::before {
+      content: "";
+      position: absolute;
+      inset: 12px;
+      border: 1px solid rgba(184, 151, 104, 0.28);
+      pointer-events: none;
+    }
+
+    .letter-header {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 30px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(184, 151, 104, 0.22);
+    }
+
+    .letter-date-top {
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--soft-mauve);
+    }
+
+    .letter-salutation {
+      font-family: var(--font-serif);
+      font-size: clamp(1.6rem, 4.2vw, 2.05rem);
+      font-weight: 500;
+      font-style: italic;
+      color: var(--ink);
+    }
+
+    .letter-body {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      font-family: var(--font-serif);
+      font-size: clamp(1.16rem, 2.8vw, 1.32rem);
+      font-weight: 400;
+      line-height: 1.82;
+      color: var(--ink);
+    }
+
+    .letter-paragraph {
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 1.1s var(--ease-cinematic), transform 1.1s var(--ease-cinematic);
+    }
+
+    .letter-paragraph.is-revealed {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .letter-footer {
+      margin-top: 38px;
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      text-align: right;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 1.1s var(--ease-cinematic), transform 1.1s var(--ease-cinematic);
+    }
+
+    .letter-footer.is-revealed {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .letter-signoff {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.2rem;
+      color: var(--ink-soft);
+      margin-bottom: 4px;
+    }
+
+    .letter-signature {
+      font-family: var(--font-script);
+      font-size: clamp(2.35rem, 6vw, 3.1rem);
+      line-height: 1.1;
+      color: var(--deep-mauve);
+      padding: 4px 2px;
+    }
+
+    /* ==========================================================================
+       POST-LETTER SECTIONS ("Open When..." Envelopes & Keep It Actions)
+       ========================================================================== */
+    .post-letter-wrap {
+      width: 100%;
+      margin-top: 52px;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 1s var(--ease-cinematic), transform 1s var(--ease-cinematic);
+    }
+
+    .post-letter-wrap.is-revealed {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .section-mini-title {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+
+    .section-mini-sub {
+      font-family: var(--font-sans);
+      font-size: 0.74rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--soft-mauve);
+      margin-bottom: 24px;
+    }
+
+    /* 3 Sealed Envelopes Grid */
+    .envelopes-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-bottom: 52px;
+    }
+
+    @media (min-width: 640px) {
+      .envelopes-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .envelope-card {
+      position: relative;
+      height: 148px;
+      border-radius: 12px;
+      border: 1px solid rgba(184, 151, 104, 0.4);
+      background: linear-gradient(165deg, #fffdf9 0%, var(--blush) 100%);
+      box-shadow: var(--shadow-soft);
+      cursor: pointer;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 20px 16px;
+      transition: transform 0.4s var(--ease-cinematic), box-shadow 0.4s ease;
+      perspective: 600px;
+    }
+
+    .envelope-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 14px 30px -10px rgba(140, 106, 115, 0.25);
+    }
+
+    /* Triangular envelope top flap */
+    .envelope-flap {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 68px;
+      background: linear-gradient(180deg, rgba(200, 144, 142, 0.26) 0%, rgba(244, 230, 227, 0.9) 100%);
+      clip-path: polygon(0 0, 100% 0, 50% 100%);
+      transform-origin: top center;
+      transition: transform 0.55s var(--ease-cinematic);
+      z-index: 2;
+      border-top: 1px solid rgba(184, 151, 104, 0.3);
+    }
+
+    .envelope-card.is-opening .envelope-flap {
+      transform: rotateX(180deg);
+    }
+
+    /* Wax seal circle */
+    .wax-seal {
+      position: absolute;
+      top: 52px;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #d6a4a2, var(--dusty-rose));
+      border: 1px solid rgba(255, 253, 249, 0.6);
+      box-shadow: 0 2px 6px rgba(54, 41, 45, 0.18);
+      z-index: 3;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .envelope-card.is-opening .wax-seal {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.7);
+    }
+
+    .envelope-label {
+      position: relative;
+      z-index: 4;
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.12rem;
+      line-height: 1.3;
+      color: var(--ink);
+    }
+
+    /* Scene 5: Keep It Actions & Closing */
+    .keep-it-panel {
+      padding-top: 36px;
+      border-top: 1px solid var(--gold-light);
+    }
+
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    .closing-signature-block {
+      margin-top: 16px;
+      color: var(--soft-mauve);
+    }
+
+    .closing-always {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.25rem;
+      color: var(--ink-soft);
+    }
+
+    .closing-date {
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted-gold);
+      margin-top: 6px;
+    }
+
+    /* ==========================================================================
+       POST-LETTER SECTIONS (Keep It Actions)
+       ========================================================================== */
+    .post-letter-wrap {
+      width: 100%;
+      margin-top: 52px;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 1s var(--ease-cinematic), transform 1s var(--ease-cinematic);
+    }
+
+    .post-letter-wrap.is-revealed {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .section-mini-title {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+
+    .section-mini-sub {
+      font-family: var(--font-sans);
+      font-size: 0.74rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--soft-mauve);
+      margin-bottom: 24px;
+    }
+
+    /* Scene 5: Keep It Actions & Closing */
+    .keep-it-panel {
+      padding-top: 36px;
+      border-top: 1px solid var(--gold-light);
+    }
+
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    .closing-signature-block {
+      margin-top: 16px;
+      color: var(--soft-mauve);
+    }
+
+    .closing-always {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 1.25rem;
+      color: var(--ink-soft);
+    }
+
+    .closing-date {
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted-gold);
+      margin-top: 6px;
+    }
+
+    /* Subtle Toast Notification (replaces alert()) */
+    .toast-banner {
+      position: fixed;
+      bottom: max(24px, env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translate(-50%, 16px);
+      z-index: 80;
+      padding: 12px 22px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--ivory);
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      box-shadow: 0 10px 25px rgba(54, 41, 45, 0.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease, transform 0.4s var(--ease-cinematic);
+      white-space: nowrap;
+    }
+
+    .toast-banner.is-shown {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ==========================================================================
+       ACCESSIBILITY: REDUCED MOTION
+       ========================================================================== */
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      #atmosphere-canvas {
+        display: none;
+      }
+    }
+
+    /* ==========================================================================
+       DEDICATED PRINT STYLESHEET (Fallback / Clean Stationery Print)
+       ========================================================================== */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #1f191b !important;
+      }
+      .top-bar,
+      .paper-grain,
+      #atmosphere-canvas,
+      #scene-1,
+      #scene-2,
+      #scene-3,
+      .letter-controls-bar,
+      .post-letter-wrap,
+      .toast-banner {
+        display: none !important;
+      }
+      .scene--letter {
+        display: block !important;
+        opacity: 1 !important;
+        transform: none !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      .stationery-sheet {
+        box-shadow: none !important;
+        border: 1px solid #b89768 !important;
+        background: #fffdf9 !important;
+        padding: 48px !important;
+      }
+      .letter-paragraph,
+      .letter-footer {
+        opacity: 1 !important;
+        transform: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Subtle Paper Texture & Floating Ambient Particles -->
+  <div class="paper-grain" aria-hidden="true"></div>
+  <canvas id="atmosphere-canvas" aria-hidden="true"></canvas>
+
+  <!-- Minimal Top Navigation HUD -->
+  <header class="top-bar">
+    <div id="chapter-indicator" class="chapter-indicator" aria-live="polite">I &mdash; Verification</div>
+  </header>
+
+  <main>
+    <!-- ========================================================================
+         SCENE 1: IDENTITY VERIFICATION ("Wait, is this really you?")
+         ======================================================================== -->
+    <section id="scene-1" class="scene is-active" aria-labelledby="scene1-title">
+      <p id="time-greeting" class="eyebrow">Good evening, my love</p>
+      <h1 id="scene1-title" class="heading-display">Wait, is this really you?</h1>
+      <p id="scene1-intro" class="subtitle-serif">
+        Before we begin... I need to make sure this is really my love.
+      </p>
+
+      <div id="quiz-card" class="prompt-card">
+        <p id="question-step" class="question-step-label">Question 1 of 2</p>
+        <h2 id="question-text" class="question-text"></h2>
+
+        <!-- Multiple-choice options container -->
+        <div id="options-container" class="options-grid" role="group" aria-label="Answer choices"></div>
+
+        <!-- Optional free-text input (shown automatically if a question has no preset options) -->
+        <form id="text-answer-form" class="input-group input-group--inline" style="display: none;">
+          <input
+            type="text"
+            id="text-answer-input"
+            class="text-field"
+            placeholder="Type your answer..."
+            autocomplete="off"
+          />
+          <button type="submit" class="btn-primary">Verify</button>
+        </form>
+
+        <p id="quiz-feedback" class="feedback-line" aria-live="polite"></p>
+
+        <div style="margin-top: 8px;">
+          <button type="button" id="hint-btn" class="btn-link">Need a small hint?</button>
+          <div id="hint-box" class="hint-box"></div>
+        </div>
+      </div>
+
+      <!-- Pass confirmation state before advancing to Scene 2 -->
+      <div id="scene1-pass-panel" style="display: none; margin-top: 24px;">
+        <p id="scene1-pass-text" class="subtitle-serif" style="margin-bottom: 26px;"></p>
+        <button type="button" id="to-scene-2-btn" class="btn-primary">Continue</button>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         SCENE 2: SPECIAL DATE ("Do you know what day today is?")
+         ======================================================================== -->
+    <section id="scene-2" class="scene" aria-labelledby="scene2-title">
+      <p class="eyebrow">A Quiet Moment</p>
+      <h1 id="scene2-title" class="heading-display">Do you know what day today is?</h1>
+      <p class="subtitle-serif">Take a guess, or choose below.</p>
+
+      <div class="prompt-card">
+        <div id="date-options-container" class="options-grid"></div>
+
+        <form id="date-custom-form" class="input-group input-group--inline" style="margin-top: 10px;">
+          <input
+            type="text"
+            id="date-custom-input"
+            class="text-field"
+            placeholder="Or type the date here..."
+            autocomplete="off"
+          />
+          <button type="submit" class="btn-ghost">Answer</button>
+        </form>
+
+        <p id="date-feedback" class="feedback-line" aria-live="polite"></p>
+
+        <!-- Revealed Date & Meaning -->
+        <div id="date-reveal-card" class="date-reveal-card">
+          <div class="divider-flourish" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+            </svg>
+          </div>
+          <div id="revealed-date-text" class="special-date-badge"></div>
+          <p id="revealed-date-meaning" class="special-date-meaning"></p>
+          <button type="button" id="to-scene-3-btn" class="btn-primary">Next</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         SCENE 3: THE DECLARATION
+         ======================================================================== -->
+    <section id="scene-3" class="scene" aria-labelledby="declaration-l1">
+      <div class="heart-emblem-wrap" aria-hidden="true">
+        <div class="heart-glow"></div>
+        <!-- Delicate single-line botanical heart SVG -->
+        <svg class="thin-heart-svg" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M32 53C32 53 10 38.6 10 22.8C10 15.9 15.4 11 21.8 11C26.1 11 29.9 13.3 32 16.9C34.1 13.3 37.9 11 42.2 11C48.6 11 54 15.9 54 22.8C54 38.6 32 53 32 53Z"
+            stroke="#B89768"
+            stroke-width="1.35"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M32 48.5C32 48.5 14 36.2 14 23C14 17.8 18 14.2 22.8 14.2"
+            stroke="#C8908E"
+            stroke-width="0.9"
+            stroke-linecap="round"
+            opacity="0.7"
+          />
+        </svg>
+      </div>
+
+      <h1 id="declaration-l1" class="declaration-line-1">
+        Today, I love you more than yesterday.
+      </h1>
+      <p id="declaration-l2" class="declaration-line-2">
+        And tomorrow, I&rsquo;ll say it again.
+      </p>
+
+      <div id="declaration-cta" class="declaration-cta">
+        <button type="button" id="to-scene-4-btn" class="btn-primary">Read my letter</button>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         SCENE 4 & 5: THE LOVE LETTER, "OPEN WHEN..." NOTES & KEEP IT
+         ======================================================================== -->
+    <section id="scene-4" class="scene scene--letter" aria-label="Your Love Letter">
+      <div class="letter-controls-bar">
+        <button type="button" id="skip-animation-btn" class="btn-link">Skip animation</button>
+      </div>
+
+      <!-- Cream Stationery Sheet (Targeted for PDF & Image Export) -->
+      <article id="stationery-capture" class="stationery-sheet">
+        <header class="letter-header">
+          <span id="letter-date-header" class="letter-date-top"></span>
+          <h2 id="letter-salutation" class="letter-salutation"></h2>
+        </header>
+
+        <div id="letter-body" class="letter-body"></div>
+
+        <footer id="letter-footer" class="letter-footer">
+          <span id="letter-signoff" class="letter-signoff"></span>
+          <span id="letter-signature" class="letter-signature"></span>
+        </footer>
+      </article>
+
+      <!-- Post-Letter Extras & Scene 5 ("Keep it") -->
+      <div id="post-letter-wrap" class="post-letter-wrap">
+        <!-- Scene 5: Keep It (PDF, Image, Replay, Closing) -->
+        <section class="keep-it-panel" aria-label="Keep this letter">
+          <h3 class="section-mini-title">Keep it close</h3>
+          <p class="section-mini-sub">Save a copy to revisit anytime</p>
+
+          <div class="actions-row">
+            <button type="button" id="download-pdf-btn" class="btn-primary">
+              Download as PDF
+            </button>
+            <button type="button" id="save-image-btn" class="btn-ghost">
+              Save as image
+            </button>
+            <button type="button" id="read-again-btn" class="btn-ghost">
+              Read again
+            </button>
+          </div>
+
+          <div class="closing-signature-block">
+            <p id="closing-always" class="closing-always"></p>
+            <p id="closing-date" class="closing-date"></p>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Banner for Export Feedback -->
+  <div id="toast-banner" class="toast-banner" role="status" aria-live="polite"></div>
+
+  <script>
+    /* ==========================================================================
+       1. CONFIGURATION OBJECT — EDIT EVERYTHING HERE BEFORE SENDING TO HER
+       ========================================================================== */
+    const CONFIG = {
+      // Her name & your name
+      herName: "Helena",
+      myName: "Sabrina",
+
+      // Palette CSS variables (Warm ivory, blush, dusty rose, soft mauve, muted gold)
+      theme: {
+        ivory: "#FAF7F2",
+        paper: "#FFFDF9",
+        blush: "#F4E6E3",
+        dustyRose: "#C8908E",
+        softMauve: "#8C6A73",
+        mutedGold: "#B89768",
+        ink: "#36292D",
+      },
+
+      // SCENE 1: Time-aware greetings & private verification questions
+      scene1: {
+        greetings: {
+          morning: "Good morning, my love",
+          afternoon: "Good afternoon, my love",
+          evening: "Good evening, my love",
+          night: "Late-night thoughts, for my love",
+        },
+        introText: "Before we begin... I need to make sure this is really my love.",
+
+        // Add 2 or 3 questions only she would know.
+        // - `options`: array of button choices (leave empty [] if you prefer a typed text box).
+        // - `acceptedAnswers`: case-insensitive, trimmed list of valid answers.
+        questions: [
+          {
+            question: "Who is my bff in the world?",
+            options: ["CUTIES", "PINKY", "TURTLES"],
+            acceptedAnswers: ["CUTIES", "PINKY"],
+            hint: "Think about the two nicknames I always call you...",
+          },
+          {
+            question: "What do I say first thing in the morning?",
+            options: ["BABYWYW", "BABY", "CHICKEN"],
+            acceptedAnswers: ["BABYWYW", "BABY"],
+            hint: "It is sweet, sleepy, and definitely not poultry.",
+          },
+        ],
+
+        // Soft, teasing, loving responses if she picks a wrong answer (no lockout)
+        wrongResponses: [
+          "Hmm, suspicious... try again, my love.",
+          "Nice try, imposter—I know you know the real answer.",
+          "Almost, sweetheart. Take another little guess.",
+        ],
+
+        passMessage: "Okay, it's really you. I'd know that heart anywhere.",
+      },
+
+      // SCENE 2: Special Date & Meaning
+      scene2: {
+        promptText: "Do you know what day today is?",
+        // Soft options she can tap (or she can type any date in the box below)
+        options: ["19 November", "1 February", "30 March", "34 December"],
+        acceptedAnswers: [
+          "19 november",
+          "november 19",
+          "19 nov",
+          "nov 19",
+          "19/11",
+          "11/19",
+        ],
+        rightResponse: "Of course you do. That's why you're mine.",
+        wrongResponse: "That's okay, I'll never forget it for both of us.",
+        specialDate: "19 November",
+        dateMeaning: "It's the first time we talk in the dms. The thing that could open a door this wide.",
+      },
+
+      // SCENE 3: Quiet Declaration
+      scene3: {
+        line1: "Today, I love you more than yesterday.",
+        line2: "And tomorrow, I'll say it again.",
+        buttonText: "Read my letter",
+      },
+
+      // SCENE 4: The Love Letter
+      scene4: {
+        salutation: "My dearest [HER NAME],",
+        paragraphs: [
+          "Today is the 20th of October, which means we're only a month away from the day we first messaged each other. Sometimes I think about how one silly, seemingly ordinary message brought me someone who has become such a big part of my life. Never in my wildest imagination did I think we'd come this far, or that we'd grow this close. Close enough that the thought of going through my days without you has become something I can hardly imagine anymore.",
+          "You already know everything about me and how I feel about you, so I hardly know what to write for a day that feels this special to me. Maybe it’s because every day with you is already a celebration. We never gave love a calendar. We never said “this is the day we pour our hearts out.” We just give it to each other, whenever we can, through our everyday conversations, our little updates, our silly jokes, and all the moments we get to share, just like water finding its way home. I love that about us.",
+          "I love that we are so honest with our feelings, even the tender and trembling ones. Of course, we're not always perfect at it. Sometimes we can be a little silly with our own worries, and when something is weighing heavily on our minds, we tend to take a little longer before opening up. Perhaps because we think keeping it to ourselves might spare the other person from worrying, or because we don't want to add another thing to their plate when we know they're already dealing with so much. Especially with this distance between us, when all we can do sometimes is listen, send a message, or wish so badly that we could reach through the screen and hold each other for a little while. But I'm learning that there's really no point in keeping those feelings to myself. That telling you what is going on in my head, even when I don't have the right words for it, is much better than letting you wonder. I don't have to figure everything out before I let you in. And perhaps that's what loving you has been teaching me.",
+          "A tear just slipped down my face while I was typing this, and I don’t even know why. It’s a little silly, because I’m still in my sweaty shirt after my workout, sitting here in my navy leggings while the water warms up, half crying and half sweating. What a combination, isn't it? 😭 But I suppose that's what you do to me sometimes. Just thinking about you make me emotional in the most ordinary, unexpected moments, and I love it all.",
+          "You were probably on your way to work when I started writing this. And I found myself thinking about you driving alone for hours every day. I know you've told me that you're used to it and that it's okay, but I still worry about you sometimes. I know you're not someone who likes to complain much. You have your responsibilities, your things to take care of, and you always seem to make sure everything is done as well as you possibly can before allowing yourself to move on to something else. It's something I admire about you, the way you take responsibility for the things that matter to you and how much care you put into doing them properly.",
+          "It's just that, sometimes, or most of the times, I wish I can be there for you too. I wish I could drive you to work every morning, keep you company along the way, and make those long journeys feel a little less lonely for my baby. I wish I could wake you up with kisses instead of having to compete with your alarms. I wish I could be there when you come home tired, when something wonderful happens at work, or when you've had one of those days when you don't even feel like talking. I want to be there when you need someone beside you, and I want to understand when you simply need a little time to yourself, too.",
+          "I want to experience all those little things with you. Not just the big milestones or the days we've been looking forward to, but the ordinary, repetitive parts of life that might not seem particularly special to anyone else. Making sure you've eaten, asking how your day went, helping you with something around the house, sitting beside you while we do our own things, or like, just being in the same room without having to say anything. I wish I could make your everyday life a little softer, just as you've made mine. And I know that one day, we'll get to have those moments. Maybe not all at once, and perhaps not exactly the way we've imagined them, but we'll get there, baby. I believe in us, and I believe in the life we're slowly making room for.",
+          "I actually just came back from my shower and saw your message waiting for me. And you know, baby? It still makes me smile every time I see a notification from you. It doesn't matter what I'm doing or how occupied I am; the moment I see your name and that little notification, my attention immediately goes to you. It's almost automatic at this point. I could be in the middle of something, and suddenly everything else can wait for a moment because my baby has messaged me. It's such a small thing, but it makes me happy every single time. You have this very rare ability to make an ordinary moment feel a little brighter without even trying. I don't know how you do it, but I hope you never underestimate how much happiness your presence brings into my days.",
+          "A few days ago, when I told you my mind was full, you told me everything would be okay. And you were right, because it always is. I feel so much lighter now that I’m focusing on what truly matters. When my mind was crowded with worries about things that haven’t even happened, I missed the little things unfolding right in front of me. I missed so many days of telling you how much I love you. I missed telling you how grateful I am to wake up knowing you exist. I missed all the small moments I dream of sharing with you, walking beside you through the market, asking which one we should buy, which one you like more, and wrapping my arms around you every night before I close my eyes.",
+          "Sometimes, before I fall asleep, I look at your face on my phone and wonder if you're really there, on the other side of the world, living your life and perhaps thinking about me at the same time. It's such a strange and wonderful feeling, knowing that someone who used to be a complete stranger to me has become someone I think about in almost everything I do. Then I read the little notes I’ve written about you, and they make me smile, because you are the realest thing I’ve ever had with anyone.",
+          "I pray for your happiness, for your health, and for you to always be protected. I know everyone comes into our lives for a reason we don’t yet understand. What I do know is that I love you, and that I love you more with every sunrise. One year is a long time to wait to be with you, yet such a short time to learn everything there is to know about you. If someone had told me back then that one silly message would lead me here, writing a letter like this to someone I would come to love so dearly, I probably wouldn't have believed them. But here I am, and I wouldn't trade the journey of getting to know you for anything. I'm so glad I sent that message. I'm so glad you replied. And I'm endlessly grateful that we kept talking, kept choosing to know each other, and allowed something so unexpected to become something this meaningful.",
+          "I love you, baby. More than I can fit into this letter, more than I can explain in one conversation, and probably more than I know how to express sometimes. Thankyou for being here, for loving me, for letting me love you.",
+          "Here's to the day we first found each other, to all the ordinary days that have become ours since then, and to all the days we haven't lived yet. To the first time we finally get to hold each other, to the little routines we'll build, to the home and memories we might one day share, and to all the years we'll spend discovering new reasons to love one another.",
+          "I hope I never walked onto your page to bring you tears or heartbreak, and I hope you never walked into my life to bring me any. I hope we stay soft, even when we’re weary, and I hope... it's you and me for a long, long time, my love.",
+          "To many more happy years of loving you dearly.",
+        ],
+        signOff: "Forever and always,",
+      },
+    };
+
+    /* ==========================================================================
+       2. APPLICATION STATE & DOM REFERENCES (In-memory only, no storage APIs)
+       ========================================================================== */
+    const state = {
+      currentScene: 1,
+      questionIndex: 0,
+      wrongAttempts: 0,
+      letterTimers: [],
+      letterFullyRevealed: false,
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    /* ==========================================================================
+       3. INITIALIZATION & THEME HYDRATION
+       ========================================================================== */
+    function applyThemeFromConfig() {
+      const root = document.documentElement;
+      const t = CONFIG.theme;
+      if (t.ivory) root.style.setProperty("--ivory", t.ivory);
+      if (t.paper) root.style.setProperty("--paper", t.paper);
+      if (t.blush) root.style.setProperty("--blush", t.blush);
+      if (t.dustyRose) root.style.setProperty("--dusty-rose", t.dustyRose);
+      if (t.softMauve) root.style.setProperty("--soft-mauve", t.softMauve);
+      if (t.mutedGold) root.style.setProperty("--muted-gold", t.mutedGold);
+      if (t.ink) root.style.setProperty("--ink", t.ink);
+    }
+
+    function getTimeGreeting() {
+      const hour = new Date().getHours();
+      const g = CONFIG.scene1.greetings;
+      if (hour >= 5 && hour < 12) return g.morning;
+      if (hour >= 12 && hour < 17) return g.afternoon;
+      if (hour >= 17 && hour < 22) return g.evening;
+      return g.night;
+    }
+
+    function resolvePlaceholders(text) {
+      return text
+        .replace(/\[HER NAME\]/g, CONFIG.herName)
+        .replace(/\[MY NAME\]/g, CONFIG.myName);
+    }
+
+    /* ==========================================================================
+       4. SCENE TRANSITION ENGINE
+       ========================================================================== */
+    const CHAPTER_NAMES = {
+      1: "I — Verification",
+      2: "II — The Date",
+      3: "III — A Quiet Truth",
+      4: "IV — For You",
+    };
+
+    function goToScene(sceneNumber) {
+      const currentEl = $(`scene-${state.currentScene}`);
+      const nextEl = $(`scene-${sceneNumber}`);
+      if (!nextEl) return;
+
+      // Fade out current scene
+      if (currentEl) {
+        currentEl.classList.remove("is-visible");
+      }
+
+      setTimeout(() => {
+        if (currentEl) currentEl.classList.remove("is-active");
+        state.currentScene = sceneNumber;
+        $("chapter-indicator").textContent = CHAPTER_NAMES[sceneNumber] || "";
+
+        nextEl.classList.add("is-active");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            nextEl.classList.add("is-visible");
+          });
+        });
+
+        if (sceneNumber === 3) startDeclarationSequence();
+        if (sceneNumber === 4) startLetterSequence();
+      }, 650);
+    }
+
+    /* ==========================================================================
+       5. SCENE 1: IDENTITY CHECK LOGIC
+       ========================================================================== */
+    function initScene1() {
+      $("time-greeting").textContent = getTimeGreeting();
+      $("scene1-intro").textContent = CONFIG.scene1.introText;
+      state.questionIndex = 0;
+      state.wrongAttempts = 0;
+      $("quiz-card").style.display = "block";
+      $("scene1-pass-panel").style.display = "none";
+      renderCurrentQuestion();
+    }
+
+    function renderCurrentQuestion() {
+      const questions = CONFIG.scene1.questions;
+      const total = questions.length;
+      const current = questions[state.questionIndex];
+
+      $("question-step").textContent = `Question ${state.questionIndex + 1} of ${total}`;
+      $("question-text").textContent = current.question;
+
+      const feedbackEl = $("quiz-feedback");
+      feedbackEl.textContent = "";
+      feedbackEl.classList.remove("is-shown");
+
+      const hintBox = $("hint-box");
+      hintBox.textContent = current.hint || "Trust your heart, my love.";
+      hintBox.classList.remove("is-shown");
+
+      const optionsContainer = $("options-container");
+      const textForm = $("text-answer-form");
+      optionsContainer.innerHTML = "";
+
+      if (Array.isArray(current.options) && current.options.length > 0) {
+        optionsContainer.style.display = "flex";
+        textForm.style.display = "none";
+
+        current.options.forEach((opt) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "option-pill";
+          btn.textContent = opt;
+          btn.addEventListener("click", () => handleQuizAnswer(opt, btn));
+          optionsContainer.appendChild(btn);
+        });
+      } else {
+        optionsContainer.style.display = "none";
+        textForm.style.display = "flex";
+        $("text-answer-input").value = "";
+      }
+    }
+
+    function handleQuizAnswer(rawInput, buttonEl = null) {
+      const current = CONFIG.scene1.questions[state.questionIndex];
+      const normalized = String(rawInput || "").trim().toLowerCase();
+      const accepted = current.acceptedAnswers.map((a) => String(a).trim().toLowerCase());
+      const feedbackEl = $("quiz-feedback");
+
+      if (accepted.includes(normalized)) {
+        if (buttonEl) {
+          buttonEl.classList.remove("is-wrong");
+          buttonEl.classList.add("is-correct");
+        }
+        feedbackEl.textContent = "Yes... that's my girl.";
+        feedbackEl.classList.add("is-shown");
+
+        setTimeout(() => {
+          if (state.questionIndex + 1 < CONFIG.scene1.questions.length) {
+            state.questionIndex += 1;
+            renderCurrentQuestion();
+          } else {
+            // Passed all questions
+            $("quiz-card").style.display = "none";
+            $("scene1-pass-text").textContent = CONFIG.scene1.passMessage;
+            $("scene1-pass-panel").style.display = "block";
+            $("scene1-pass-panel").style.animation = "fadeSlideUp 0.7s var(--ease-cinematic) forwards";
+          }
+        }, 750);
+      } else {
+        if (buttonEl) {
+          buttonEl.classList.remove("is-wrong");
+          void buttonEl.offsetWidth; // restart subtle shake
+          buttonEl.classList.add("is-wrong");
+        }
+        const responses = CONFIG.scene1.wrongResponses;
+        const msg = responses[state.wrongAttempts % responses.length];
+        state.wrongAttempts += 1;
+        feedbackEl.textContent = msg;
+        feedbackEl.classList.add("is-shown");
+      }
+    }
+
+    /* ==========================================================================
+       6. SCENE 2: SPECIAL DATE LOGIC
+       ========================================================================== */
+    function initScene2() {
+      $("scene2-title").textContent = CONFIG.scene2.promptText;
+      const container = $("date-options-container");
+      container.innerHTML = "";
+
+      $("date-feedback").textContent = "";
+      $("date-feedback").classList.remove("is-shown");
+      $("date-reveal-card").classList.remove("is-shown");
+      $("date-custom-input").value = "";
+
+      CONFIG.scene2.options.forEach((opt) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "option-pill";
+        btn.textContent = opt;
+        btn.addEventListener("click", () => evaluateDateAnswer(opt, btn));
+        container.appendChild(btn);
+      });
+    }
+
+    function evaluateDateAnswer(rawInput, buttonEl = null) {
+      const normalized = String(rawInput || "").trim().toLowerCase();
+      if (!normalized) return;
+
+      const accepted = CONFIG.scene2.acceptedAnswers.map((a) => String(a).trim().toLowerCase());
+      const isMatch =
+        accepted.includes(normalized) ||
+        normalized.includes(CONFIG.scene2.specialDate.toLowerCase());
+
+      if (buttonEl) {
+        document.querySelectorAll("#date-options-container .option-pill").forEach((el) => {
+          el.classList.remove("is-correct");
+        });
+        buttonEl.classList.add("is-correct");
+      }
+
+      const feedbackEl = $("date-feedback");
+      feedbackEl.textContent = isMatch
+        ? CONFIG.scene2.rightResponse
+        : CONFIG.scene2.wrongResponse;
+      feedbackEl.classList.add("is-shown");
+
+      $("revealed-date-text").textContent = CONFIG.scene2.specialDate;
+      $("revealed-date-meaning").textContent = CONFIG.scene2.dateMeaning;
+      $("date-reveal-card").classList.add("is-shown");
+    }
+
+    /* ==========================================================================
+       7. SCENE 3: QUIET DECLARATION SEQUENCE
+       ========================================================================== */
+    function startDeclarationSequence() {
+      const l1 = $("declaration-l1");
+      const l2 = $("declaration-l2");
+      const cta = $("declaration-cta");
+
+      l1.textContent = CONFIG.scene3.line1;
+      l2.textContent = CONFIG.scene3.line2;
+      $("to-scene-4-btn").textContent = CONFIG.scene3.buttonText;
+
+      l1.classList.remove("is-revealed");
+      l2.classList.remove("is-revealed");
+      cta.classList.remove("is-revealed");
+
+      setTimeout(() => l1.classList.add("is-revealed"), 350);
+      setTimeout(() => l2.classList.add("is-revealed"), 1850);
+      setTimeout(() => cta.classList.add("is-revealed"), 3200);
+    }
+
+    /* ==========================================================================
+       8. SCENE 4 & 5: LOVE LETTER REVEAL, ENVELOPES & EXPORTS
+       ========================================================================== */
+    function clearLetterTimers() {
+      state.letterTimers.forEach((id) => clearTimeout(id));
+      state.letterTimers = [];
+    }
+
+    function buildLetterDOM() {
+      $("letter-date-header").textContent = CONFIG.scene2.specialDate;
+      $("letter-salutation").textContent = resolvePlaceholders(CONFIG.scene4.salutation);
+
+      const bodyEl = $("letter-body");
+      bodyEl.innerHTML = "";
+      CONFIG.scene4.paragraphs.forEach((paraText) => {
+        const p = document.createElement("p");
+        p.className = "letter-paragraph";
+        p.textContent = resolvePlaceholders(paraText);
+        bodyEl.appendChild(p);
+      });
+
+      $("letter-signoff").textContent = CONFIG.scene4.signOff;
+      $("letter-signature").textContent = CONFIG.myName;
+
+      // Closing line in Scene 5
+      $("closing-always").textContent = `Always yours, ${CONFIG.myName}`;
+      $("closing-date").textContent = CONFIG.scene2.specialDate;
+    }
+
+    function startLetterSequence() {
+      clearLetterTimers();
+      state.letterFullyRevealed = false;
+      buildLetterDOM();
+
+      const skipBtn = $("skip-animation-btn");
+      skipBtn.style.visibility = "visible";
+
+      const paragraphs = Array.from(document.querySelectorAll(".letter-paragraph"));
+      const footer = $("letter-footer");
+      const postWrap = $("post-letter-wrap");
+
+      footer.classList.remove("is-revealed");
+      postWrap.classList.remove("is-revealed");
+
+      // Gently reveal paragraph by paragraph
+      paragraphs.forEach((p, idx) => {
+        const timer = setTimeout(() => {
+          p.classList.add("is-revealed");
+        }, 450 + idx * 1150);
+        state.letterTimers.push(timer);
+      });
+
+      const totalRevealTime = 450 + paragraphs.length * 1150;
+
+      const footerTimer = setTimeout(() => {
+        footer.classList.add("is-revealed");
+      }, totalRevealTime);
+
+      const postTimer = setTimeout(() => {
+        postWrap.classList.add("is-revealed");
+        skipBtn.style.visibility = "hidden";
+        state.letterFullyRevealed = true;
+      }, totalRevealTime + 900);
+
+      state.letterTimers.push(footerTimer, postTimer);
+    }
+
+    function revealAllLetterImmediately() {
+      clearLetterTimers();
+      document.querySelectorAll(".letter-paragraph").forEach((p) => p.classList.add("is-revealed"));
+      $("letter-footer").classList.add("is-revealed");
+      $("post-letter-wrap").classList.add("is-revealed");
+      $("skip-animation-btn").style.visibility = "hidden";
+      state.letterFullyRevealed = true;
+    }
+
+    /* ==========================================================================
+       9. EXPORT AS PDF & SAVE AS IMAGE (With Print Fallback)
+       ========================================================================== */
+    function openEnvelopeNote(cardEl, note) {
+      cardEl.classList.add("is-opening");
+      setTimeout(() => {
+        $("note-modal-title").textContent = note.label;
+        $("note-modal-body").textContent = resolvePlaceholders(note.message);
+
+        const modal = $("note-modal");
+        modal.classList.add("is-open");
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            modal.classList.add("is-visible");
+          });
+        });
+
+        setTimeout(() => cardEl.classList.remove("is-opening"), 500);
+      }, 340);
+    }
+
+    function closeEnvelopeModal() {
+      const modal = $("note-modal");
+      modal.classList.remove("is-visible");
+      setTimeout(() => {
+        modal.classList.remove("is-open");
+      }, 420);
+    }
+
+    /* ==========================================================================
+       10. EXPORT AS PDF & SAVE AS IMAGE (With Print Fallback)
+       ========================================================================== */
+    let toastTimeout = null;
+    function showToast(message) {
+      const toast = $("toast-banner");
+      toast.textContent = message;
+      toast.classList.add("is-shown");
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove("is-shown");
+      }, 3200);
+    }
+
+    async function captureLetterCanvas() {
+      if (!state.letterFullyRevealed) {
+        revealAllLetterImmediately();
+      }
+      if (typeof window.html2canvas !== "function") {
+        return null;
+      }
+
+      const sheet = $("stationery-capture");
+      return await window.html2canvas(sheet, {
+        scale: 2,
+        backgroundColor: CONFIG.theme.paper || "#FFFDF9",
+        useCORS: true,
+        logging: false,
+      });
+    }
+
+    async function handleDownloadPDF() {
+      showToast("Preparing your stationery PDF...");
+      try {
+        const canvas = await captureLetterCanvas();
+        const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+
+        if (!canvas || !jsPDFCtor) {
+          window.print();
+          return;
+        }
+
+        const pdf = new jsPDFCtor({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 14;
+        const contentWidth = pageWidth - margin * 2;
+        const contentHeight = pageHeight - margin * 2;
+
+        // Calculate pixel height per A4 page at the scaled width
+        const pxPerMm = canvas.width / contentWidth;
+        const pageSliceHeightPx = Math.floor(contentHeight * pxPerMm);
+        let sourceY = 0;
+        let pageIndex = 0;
+
+        while (sourceY < canvas.height) {
+          if (pageIndex > 0) {
+            pdf.addPage();
+          }
+
+          // Warm ivory page backdrop
+          pdf.setFillColor(250, 247, 242);
+          pdf.rect(0, 0, pageWidth, pageHeight, "F");
+
+          const sliceHeightPx = Math.min(pageSliceHeightPx, canvas.height - sourceY);
+          const sliceCanvas = document.createElement("canvas");
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = sliceHeightPx;
+
+          const sliceCtx = sliceCanvas.getContext("2d");
+          sliceCtx.drawImage(
+            canvas,
+            0,
+            sourceY,
+            canvas.width,
+            sliceHeightPx,
+            0,
+            0,
+            canvas.width,
+            sliceHeightPx
+          );
+
+          const sliceImgData = sliceCanvas.toDataURL("image/jpeg", 0.95);
+          const renderedSliceHeightMm = sliceHeightPx / pxPerMm;
+
+          pdf.addImage(
+            sliceImgData,
+            "JPEG",
+            margin,
+            margin,
+            contentWidth,
+            renderedSliceHeightMm
+          );
+
+          sourceY += sliceHeightPx;
+          pageIndex += 1;
+        }
+
+        pdf.save("A-Love-Letter-For-Helena.pdf");
+        showToast("Saved as PDF.");
+      } catch (err) {
+        // Fallback to dedicated @media print stylesheet
+        window.print();
+      }
+    }
+
+    async function handleSaveImage() {
+      showToast("Creating keepsake image...");
+      try {
+        const letterCanvas = await captureLetterCanvas();
+        if (!letterCanvas) {
+          showToast("Opening print view so you can save it.");
+          window.print();
+          return;
+        }
+
+        // Add a soft ivory outer frame so it looks lovely in a phone gallery
+        const pad = 64;
+        const framed = document.createElement("canvas");
+        framed.width = letterCanvas.width + pad * 2;
+        framed.height = letterCanvas.height + pad * 2;
+
+        const ctx = framed.getContext("2d");
+        ctx.fillStyle = CONFIG.theme.ivory || "#FAF7F2";
+        ctx.fillRect(0, 0, framed.width, framed.height);
+        ctx.drawImage(letterCanvas, pad, pad);
+
+        const link = document.createElement("a");
+        link.download = "Love-Letter-For-Helena.png";
+        link.href = framed.toDataURL("image/png");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("Saved to your downloads.");
+      } catch (err) {
+        showToast("Could not export image—try PDF or Print.");
+      }
+    }
+
+    /* ==========================================================================
+       11. SUBTLE DRIFTING PETALS & WARM DUST PARTICLE ATMOSPHERE
+       ========================================================================== */
+    function initAtmosphereCanvas() {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+      const canvas = $("atmosphere-canvas");
+      const ctx = canvas.getContext("2d");
+      let width = (canvas.width = window.innerWidth);
+      let height = (canvas.height = window.innerHeight);
+
+      window.addEventListener("resize", () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      const particleCount = Math.min(18, Math.floor(width / 55) + 8);
+      const particles = Array.from({ length: particleCount }, (_, idx) => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: 2.5 + Math.random() * 4.5,
+        speedY: 0.18 + Math.random() * 0.28,
+        swayAmp: 0.3 + Math.random() * 0.5,
+        swayFreq: 0.004 + Math.random() * 0.006,
+        phase: Math.random() * Math.PI * 2,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.008,
+        isPetal: idx % 2 === 0,
+        opacity: 0.22 + Math.random() * 0.26,
+      }));
+
+      function render() {
+        ctx.clearRect(0, 0, width, height);
+
+        particles.forEach((p) => {
+          p.y += p.speedY;
+          p.phase += p.swayFreq;
+          p.x += Math.sin(p.phase) * p.swayAmp;
+          p.rotation += p.rotSpeed;
+
+          if (p.y > height + 16) {
+            p.y = -16;
+            p.x = Math.random() * width;
+          }
+
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.globalAlpha = p.opacity;
+
+          if (p.isPetal) {
+            // Soft dusty-rose botanical petal silhouette
+            ctx.fillStyle = "#C8908E";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, p.size * 1.4, p.size * 0.72, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            // Warm muted-gold floating light mote
+            ctx.fillStyle = "#B89768";
+            ctx.beginPath();
+            ctx.arc(0, 0, p.size * 0.55, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.restore();
+        });
+
+        requestAnimationFrame(render);
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    /* ==========================================================================
+       13. EVENT WIRING & BOOTSTRAP
+       ========================================================================== */
+    window.addEventListener("DOMContentLoaded", () => {
+      applyThemeFromConfig();
+      initAtmosphereCanvas();
+      initScene1();
+      initScene2();
+
+      // Reveal Scene 1 smoothly on load
+      requestAnimationFrame(() => {
+        $("scene-1").classList.add("is-visible");
+      });
+
+      // Scene 1 Events
+      $("text-answer-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        handleQuizAnswer($("text-answer-input").value);
+      });
+
+      $("hint-btn").addEventListener("click", () => {
+        $("hint-box").classList.toggle("is-shown");
+      });
+
+      $("to-scene-2-btn").addEventListener("click", () => goToScene(2));
+
+      // Scene 2 Events
+      $("date-custom-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        evaluateDateAnswer($("date-custom-input").value);
+      });
+
+      $("to-scene-3-btn").addEventListener("click", () => goToScene(3));
+
+      // Scene 3 Events
+      $("to-scene-4-btn").addEventListener("click", () => goToScene(4));
+
+      // Scene 4 & 5 Events
+      $("skip-animation-btn").addEventListener("click", revealAllLetterImmediately);
+
+      $("download-pdf-btn").addEventListener("click", handleDownloadPDF);
+      $("save-image-btn").addEventListener("click", handleSaveImage);
+
+      $("read-again-btn").addEventListener("click", () => {
+        clearLetterTimers();
+        initScene1();
+        initScene2();
+        goToScene(1);
+      });
+    });
+  </script>
+</body>
+</html>
